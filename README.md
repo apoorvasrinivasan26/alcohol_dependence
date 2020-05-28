@@ -1,1 +1,3 @@
-# alcohol_dependence
+# Alcohol Dependence
+
+Exploring the outcome of three interventions on alcohol depedence among men and women
