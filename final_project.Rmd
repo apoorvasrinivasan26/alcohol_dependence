@@ -1,0 +1,185 @@
+---
+title: "final_project"
+author: "Apoorva Srinivasan"
+date: "11/30/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(gee)
+library(data.table)
+library(ggplot2)
+library(geepack)
+library(nlme)
+library(lme4)
+```
+
+```{r}
+alcdep_df = read.table("ALCDEP.txt")  %>%
+  mutate(Gender = as.factor(Gender),
+         Treatment = as.factor(Treatment),
+         Relapse = as.factor(Relapse))
+
+alcdep_long = 
+  pivot_longer(
+alcdep_df,
+'ND0':'ND60',
+names_to = "month",
+values_to = "num_drinks"
+) %>%
+mutate(
+month = ifelse(month == "ND0", 0, ifelse(month == "ND30", 30, 60)),
+Gender = as.factor(Gender),
+Relapse = as.factor(Relapse),
+Treatment = as.factor(Treatment)
+)
+  
+##no missing values
+
+```
+
+
+## Drinks between treatment groups over time
+
+```{r}
+alc_mean = alcdep_long %>%
+  group_by(Treatment, month) %>%
+  mutate(mean_drinks = mean(num_drinks))
+
+ggplot(alc_mean,
+aes(x = month,
+y = mean_drinks,
+group = sid,
+color = Treatment)) +
+geom_line() +
+theme_bw() +
+ggtitle("Number of drinks over time between the treatment groups") +
+  labs(y="Mean number of drinks", x = "time(month)")
+```
+
+#### Is there evidence to suggest that the treatments differ in their effects on alcohol dependence,as reflected by the number of drinks consumed in a given 30 day period?
+
+
+
+```{r}
+
+gee.model = geeglm(num_drinks ~ Treatment*month, family = poisson(link = "log"), corstr = "exchangeable", id = sid, data = alcdep_long)
+summary(gee.model)
+
+glm.model = glmer(num_drinks ~ Treatment*month + (1 | sid),
+family = 'poisson',
+data = alcdep_long)
+summary(glm.model)
+
+```
+
+
+#### Is there a difference in the pattern of change in the number of drinks consumed between the various treatment groups over the duration of the study?
+
+difference in log rate ratio of expected number of drinks between treatment group 2 and treatment group 1 per unit increase in month is similar to difference in log rate ratio of expected number of drinks consumed in one month between treatment group 3 and treatment group 1 per unit increase is month (~0.007(0.0003)). 
+
+The log rate ratio of expected number of drinks consumed in treatment 1 per unit increase in month is also 0.007(0.0002).i.e. about 1 drink decrease in a given 30 day period. This suggests that there is no difference in the pattern of change in the number of drinks consumed between the various treatment groups over the duration of the study. 
+
+
+#### Alcohol-use disorders are among the most disabling disease categories for the global burdenof disease especially for men.  Is there evidence to suggest that males tend to have a higheralcohol dependence than females?
+
+
+## Drinks between genders over time
+
+```{r}
+
+ggplot(alcdep_long,
+aes(x = month,
+y = num_drinks,
+group = sid,
+color = Gender)) +
+geom_line() +
+theme_bw() +
+ggtitle("Number of drinks over time between two genders") +
+  labs(y="Number of drinks", x = "time(month)")
+```
+
+Yeah, from the above graph, men have higher occurances than females at all timepoints including baseline
+
+
+
+```{r}
+
+alc_mean = alcdep_long %>%
+  group_by(Gender, month) %>%
+  mutate(mean_drinks = mean(num_drinks))
+
+
+ggplot(alc_mean,
+aes(x = month,
+y = mean_drinks,
+group = sid,
+color = Gender)) +
+geom_line() +
+theme_bw() +
+ggtitle("Mean number of drinks over time between two genders")
+```
+
+#### Do men and women respond differently to treatment ?
+
+```{r}
+gee.gender.model = geeglm(num_drinks ~ Gender*month, family = 'poisson', corstr = "exchangeable", id = sid, data = alcdep_long) 
+summary(gee.gender.model)
+```
+
+
+```{r}
+mem.gender.model =  glmer(num_drinks ~ Gender*month + (1 | sid),
+family = 'poisson',
+data = alcdep_long)
+summary(mem.gender.model)
+```
+
+log rate of number of drinks consumed for a typical male at baseline in the study is 5.15(0.01) and the log rate ratio of number of drinks consumed at baseline for a typical woman compared to a man is -0.99(0.01).
+
+With treatment, the difference in log rate ratio of number of drinks consumed between a male and a female with similar propensity for an increase in 30 days is 0(0.0003, p = 0.018). This implies that men and woman do not respond differently to treatment.
+
+#### Is there any evidence to suggest that the treatments differ in their effects on subjects with regard to relapsing into alcohol dependence ?
+
+```{r}
+
+###Mixed model
+relapse.mm = glm(Relapse ~ Treatment, 
+                        family = "binomial",
+                       data = alcdep_long) 
+summary(relapse.mm)
+
+```
+
+
+Log odds of subjects in treatment 1 relapsing into alcohol dependence 6 months after the treatment was 1.52(SE = 0.146, p<<0.05) i.e. the odds of relapsing into alcohol dependence in treatment group 1 is 4.57. The log odds ratio of relapsing for subjects in treatment 2 comparing those in treatment 1 is -1.69(SE =0.184, p<<0.05) and finally, the log odds ratio of relapsing for subjects in treatment 3 comparing those in treatment 1 is -3.348(SE = 0.221, p<<0.05). Hence, treatment 3 seems to be most effective.
+
+
+#### Even in the case that the treatments might differ in their pattern of change or on how subjects relapse into alcohol dependence, is there any evidence to suggest that any of the treatments might be beneficial once the treatment has stopped.
+
+
+noo,since the difference above is not signicant. there isn't enough evidence that the treatment is beneficial.
+
+
+###Main effects model
+
+```{r}
+##GEE MODEL
+gee.model = geeglm(num_drinks ~ Treatment*month + Gender*month, family = poisson(link = "log"), corstr = "exchangeable", id = sid, data = alcdep_long)
+summary(gee.model)
+
+##MIXED EFFCT MODEL
+glm.model = glmer(num_drinks ~ Treatment*month + Gender*month + (1 | sid),
+family = 'poisson',
+data = alcdep_long)
+summary(glm.model)
+
+```
+
+```{r}
+modelAOV <- aov(num_drinks~ factor(Treatment) +Error(sid), data = alcdep_long)
+print(summary(modelAOV))
+```
+
